@@ -13,13 +13,13 @@ class VAE(object):
         with tf.variable_scope('model') as scope:
             encoding = self.encoder(self.X, self.conf.hidden_size*2)
 
-            mean = encoding[:, :self.conf.hidden_size]
-            stddev = tf.sigmoid(encoding[:, self.conf.hidden_size:self.conf.hidden_size*2])
+            self.mean = encoding[:, :self.conf.hidden_size]
+            self.stddev = tf.sqrt(tf.exp(encoding[:, self.conf.hidden_size:self.conf.hidden_size*2]))
 
             epsilon = tf.random_normal([self.conf.batch_size, self.conf.hidden_size])
-            latent_sample = mean + tf.multiply(stddev, epsilon)
+            self.latent_sample = self.mean + tf.multiply(self.stddev, epsilon)
 
-            latent = tf.reshape(latent_sample, [-1, 1, 1, self.conf.hidden_size])
+            latent = tf.reshape(self.latent_sample, [-1, 1, 1, self.conf.hidden_size])
             self.tsample = self.decoder(latent)
 
         with tf.variable_scope('model', reuse=True) as scope:
@@ -27,8 +27,8 @@ class VAE(object):
             gsample = tf.reshape(gsample, [-1, 1, 1, self.conf.hidden_size])
             self.gsample = self.decoder(gsample)
 
-        self.kl_loss = self.get_kl_loss(mean, stddev)
-        self.l2_loss = self.get_l2_loss(self.tsample, self.X, self.conf.one_over_sigma)
+        self.kl_loss = self.get_kl_loss(self.mean, self.stddev)
+        self.l2_loss = self.get_l2_loss(self.tsample, self.X, self.conf.sigma)
 
         self.loss = self.kl_loss + self.l2_loss
 
@@ -41,18 +41,30 @@ class VAE(object):
     def get_gsample(self):
         return self.gsample
 
-    def get_l2_loss(self, tsample, X, one_over_sigma):
+    def get_l2_loss(self, tsample, X, sigma):
         '''
-        compute ||tsample-X||^2 / sigma^2
+        compute ||tsample-X||^2 * (1/sigma^2)
         '''
-        l2 = tf.reduce_sum(tf.squared_difference(tsample, X))
-        return tf.scalar_mul(one_over_sigma, l2)
+        l2 = tf.losses.mean_squared_error(tsample, X)
+        one_over_sigma_square = tf.div(1.0, tf.square(sigma))
+        return tf.scalar_mul(one_over_sigma_square, l2)
 
     def get_kl_loss(self, mean, stddev, offset=1e-8):
         '''
         compute KL divergence between N(mean, stddev^2) and N(0,I)
         '''
-        return tf.reduce_sum(0.5*(tf.square(stddev) + tf.square(mean) - 1.0 - 2.0*tf.log(stddev+offset)))
+        return tf.reduce_mean(0.5*(tf.square(stddev) + tf.square(mean) - 1.0 - 2.0*tf.log(stddev+offset)))
+
+    def log_marginal_likelihood_estimate(self):
+        '''
+        compute log(p(x|z)) + log(z) - log(q(z|x)) once for the current batch
+        '''
+        x_mean = tf.reshape(self.X, [self.conf.batch_size, -1])
+        x_sample = tf.reshape(self.tsample, [self.conf.batch_size, -1])
+        x_sigma = tf.multiply(self.conf.sigma, tf.ones(x_mean.shape))
+        return log_likelihood_gaussian(x_sample, x_mean, x_sigma) +\
+                log_likelihood_prior(self.latent_sample) -\
+                log_likelihood_gaussian(self.latent_sample, self.mean, self.stddev)
 
     def encoder(self, inputs, num_outputs):
         '''

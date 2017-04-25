@@ -16,14 +16,16 @@ class Model():
             os.makedirs(self.conf.modeldir)
         if not os.path.exists(self.conf.logdir):
             os.makedirs(self.conf.logdir)
-        self.data = input_data.read_data_sets(self.conf.data_dir).train
+        data = input_data.read_data_sets(self.conf.data_dir)
+        self.train_data = data.train
+        self.test_data = data.test
         self.configure_network()
 
     def configure_network(self):
         self.build_network()
         self.train_summary = self.configure_summary('train')
         self.valid_summary = self.configure_summary('valid')
-        self.rng = np.random.RandomState(self.conf.random_seed)
+        # self.rng = np.random.RandomState(self.conf.random_seed)
         tf.set_random_seed(self.conf.random_seed)
         self.sess.run(tf.global_variables_initializer())
         trainable_vars = tf.trainable_variables()
@@ -38,6 +40,7 @@ class Model():
         self.train_op = tf.contrib.layers.optimize_loss(loss, tf.contrib.framework.get_or_create_global_step(), 
             learning_rate=self.conf.learning_rate, optimizer='Adam', update_ops=[])
         self.gsample = model.get_gsample()
+        self.log_marginal_likelihood_estimate = model.log_marginal_likelihood_estimate()
 
     def configure_summary(self, name):
         summarys = []
@@ -64,7 +67,7 @@ class Model():
             train_kl_losses = []
             train_l2_losses = []
             for i in range(1, self.conf.updates_per_epoch+1):
-                X, _ = self.data.next_batch(self.conf.batch_size)
+                X, _ = self.train_data.next_batch(self.conf.batch_size)
                 X = np.reshape(X, (self.conf.batch_size, self.conf.height, self.conf.width, self.conf.channel))
                 feed_dict = {self.X: X}
                 
@@ -89,6 +92,25 @@ class Model():
                 epoch, time.time() - begin, train_kl_loss, train_l2_loss))
             sys.stdout.flush()
             
+            # after one epoch, do test: calculate log_marginal_likelihood_estimate
+            sum_ll = 0.
+            for i in range(100):
+                X, _ = self.test_data.next_batch(self.conf.batch_size)
+                X = np.reshape(X, (self.conf.batch_size, self.conf.height, self.conf.width, self.conf.channel))
+                feed_dict = {self.X: X}
+                sample_ll = []
+                for j in range(1000):
+                    sample_ll.append(self.sess.run(self.log_marginal_likelihood_estimate, feed_dict=feed_dict))
+                sample_ll = np.array(sample_ll)
+                # print(sample_ll.shape)
+                m = np.amax(sample_ll, axis=1, keepdims=True)
+                log_marginal_estimate = m + np.log(np.mean(np.exp(sample_ll - m), axis=1, keepdims=True))
+                sum_ll += np.mean(log_marginal_estimate)
+            sum_ll /= 100.
+            print("---nll: %d" % sum_ll)
+            sys.stdout.flush()
+
+
             if epoch % self.conf.save_interval == 0:
                 self.save(epoch)
 
