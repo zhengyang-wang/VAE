@@ -57,12 +57,12 @@ class VAE(object):
 
     def log_marginal_likelihood_estimate(self):
         '''
-        compute log(p(x|z)) + log(z) - log(q(z|x)) once for the current batch
+        compute log(p(x|z)) + log(p(z)) - log(q(z|x)) once for the current batch
         '''
         x_mean = tf.reshape(self.X, [self.conf.batch_size, -1])
         x_sample = tf.reshape(self.tsample, [self.conf.batch_size, -1])
         x_sigma = tf.multiply(self.conf.sigma, tf.ones(x_mean.shape))
-        return log_likelihood_gaussian(x_sample, x_mean, x_sigma) +\
+        return log_likelihood_gaussian(x_mean, x_sample， x_sigma) +\
                 log_likelihood_prior(self.latent_sample) -\
                 log_likelihood_gaussian(self.latent_sample, self.mean, self.stddev)
 
