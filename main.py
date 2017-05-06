@@ -6,9 +6,9 @@ from model import Model
 flags = tf.flags
 # training
 flags.DEFINE_integer('max_epochs', 10, 'maximum number of epochs')
-flags.DEFINE_integer('validation_interval', 500, 'number of iterations for validation')
+flags.DEFINE_integer('validation_interval', 550, 'number of iterations for validation')
 flags.DEFINE_integer('save_interval', 10, 'number of epochs for saving')
-flags.DEFINE_integer("updates_per_epoch", 500, "number of updates per epoch")
+flags.DEFINE_integer("updates_per_epoch", 550, "number of updates per epoch")
 flags.DEFINE_integer('summary_step', 50, 'number of steps to save the summary')
 flags.DEFINE_float('learning_rate', 1e-2, 'learning rate')
 # data
@@ -18,7 +18,7 @@ flags.DEFINE_integer('height', 28, 'image height')
 flags.DEFINE_integer('width', 28, 'image width')
 flags.DEFINE_integer('hidden_size', 128, 'dimension of latent variable')
 flags.DEFINE_float('sigma', 1.0, 'hyperparameter sigma')
-flags.DEFINE_string('data_dir', '/tempspace/zwang6/binarized_mnist', 'data directory')
+flags.DEFINE_string('data_dir', '/tempspace/zwang6/mnist', 'data directory')
 # debug
 flags.DEFINE_string('model_name', 'model', 'model filename')
 flags.DEFINE_string('logdir', 'log', 'log directory')

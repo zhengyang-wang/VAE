@@ -3,9 +3,6 @@ import tensorflow as tf
 
 log2pi = tf.constant(np.log(2*np.pi), tf.float32)
 
-def log_likelihood_bernoulli(sample, mean):
-    return tf.reduce_sum(sample * tf.log(mean) + (1 - sample) * tf.log(1 - mean), axis=1)
-
 def log_likelihood_gaussian(sample, mean, sigma):
     '''
     compute log(sample~Gaussian(mean, sigma^2))
