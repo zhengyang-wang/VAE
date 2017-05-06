@@ -16,7 +16,6 @@ class DataLoader(object):
 
         self.batch_size = batch_size
         self.shuffle = shuffle
-        self.return_labels = return_labels
 
         data_file = open(data_dir + '/binarized_mnist_' + subset +'.amat', 'r')
         self.images = lines_to_np_array(data_file.readlines()).astype('float32')
