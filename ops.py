@@ -1,21 +1,29 @@
 import numpy as np
 import tensorflow as tf
 
-log2pi = tf.constant(np.log(2*np.pi), tf.float32)
+def parzen_cpu_batch(x_batch, samples, sigma, batch_size, num_of_samples, data_size):
+    '''
+    x_batch:    a data batch (batch_size, data_size), data_size = h*w*c for images
+    samples:    generated data (num_of_samples, data_size)
+    sigma:      standard deviation (float32)
+    '''
 
-def log_likelihood_gaussian(sample, mean, sigma):
-    '''
-    compute log(sample~Gaussian(mean, sigma^2))
-    '''
-    return -log2pi*tf.cast(sample.shape[1].value, tf.float32)/2 -\
-            tf.reduce_sum(tf.square((sample-mean)/sigma) + 2*tf.log(sigma), 1)/2
+    # a=(x-x_i)/sigma, use broadcast
+    x = x_batch.reshape((batch_size, 1, data_size))
+    mu = samples.reshape((1, num_of_samples, data_size))
+    a = (x - mu)/sigma # (batch_size, num_of_samples, data_size)
 
-def log_likelihood_prior(sample):
-    '''
-    compute log(sample~Gaussian(0, I))
-    '''
-    return -log2pi*tf.cast(sample.shape[1].value, tf.float32)/2 -\
-            tf.reduce_sum(tf.square(sample), 1)/2
+    # sum -0.5*a^2
+    tmp = -0.5*(a**2).sum(2) # (batch_size, num_of_samples)
+
+    # log_mean_exp trick
+    max_ = np.amax(tmp, axis=1, keepdims=True) # (batch_size, 1)
+    E = max_ + np.log(np.mean(np.exp(tmp - max_), axis=1, keepdims=True)) # (batch_size, 1)
+
+    # Z = dim * log(sigma * sqrt(2*pi)), dim = data_size
+    Z = data_size * np.log(sigma * np.sqrt(np.pi * 2))
+
+    return E-Z
 
 # def lrelu(x, alpha=0.1):
 #     return tf.maximum(alpha * x, x)

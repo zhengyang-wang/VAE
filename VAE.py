@@ -45,7 +45,7 @@ class VAE(object):
         '''
         compute ||tsample-X||^2 * (1/sigma^2)
         '''
-        l2 = tf.losses.mean_squared_error(tsample, X)
+        l2 = l2 = tf.reduce_sum(tf.squared_difference(tsample, X))
         one_over_sigma_square = tf.div(1.0, tf.square(sigma))
         return tf.scalar_mul(one_over_sigma_square, l2)
 
@@ -53,18 +53,7 @@ class VAE(object):
         '''
         compute KL divergence between N(mean, stddev^2) and N(0,I)
         '''
-        return tf.reduce_mean(0.5*(tf.square(stddev) + tf.square(mean) - 1.0 - 2.0*tf.log(stddev+offset)))
-
-    def log_marginal_likelihood_estimate(self):
-        '''
-        compute log(p(x|z)) + log(p(z)) - log(q(z|x)) once for the current batch
-        '''
-        x_mean = tf.reshape(self.X, [self.conf.batch_size, -1])
-        x_sample = tf.reshape(self.tsample, [self.conf.batch_size, -1])
-        x_sigma = tf.multiply(self.conf.sigma, tf.ones(x_mean.shape))
-        return log_likelihood_gaussian(x_mean, x_sample, x_sigma) +\
-                log_likelihood_prior(self.latent_sample) -\
-                log_likelihood_gaussian(self.latent_sample, self.mean, self.stddev)
+        return tf.reduce_sum(0.5*(tf.square(stddev) + tf.square(mean) - 1.0 - 2.0*tf.log(stddev+offset)))
 
     def encoder(self, inputs, num_outputs):
         '''

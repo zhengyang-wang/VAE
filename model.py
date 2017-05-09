@@ -3,6 +3,7 @@ import sys
 import tensorflow as tf
 import numpy as np
 import time
+from ops import parzen_cpu_batch
 
 from tensorflow.examples.tutorials.mnist import input_data
 from VAE import VAE
@@ -19,6 +20,7 @@ class Model():
         data = input_data.read_data_sets(self.conf.data_dir)
         self.train_data = data.train
         self.test_data = data.test
+        self.valid_data = data.valid
         self.configure_network()
 
     def configure_network(self):
@@ -40,7 +42,6 @@ class Model():
         self.train_op = tf.contrib.layers.optimize_loss(loss, tf.contrib.framework.get_or_create_global_step(), 
             learning_rate=self.conf.learning_rate, optimizer='Adam', update_ops=[])
         self.gsample = model.get_gsample()
-        self.log_marginal_likelihood_estimate = model.log_marginal_likelihood_estimate()
 
     def configure_summary(self, name):
         summarys = []
@@ -91,28 +92,49 @@ class Model():
             print("Epoch %d, time = %ds, train kl loss = %.4f, train l2 loss = %.4f" % (
                 epoch, time.time() - begin, train_kl_loss, train_l2_loss))
             sys.stdout.flush()
-            
-            # after one epoch, do test: calculate log_marginal_likelihood_estimate
-            sum_ll = 0.
-            for i in range(100):
-                X, _ = self.test_data.next_batch(self.conf.batch_size)
-                X = np.reshape(X, (self.conf.batch_size, self.conf.height, self.conf.width, self.conf.channel))
-                feed_dict = {self.X: X}
-                sample_ll = []
-                for j in range(1000):
-                    sample_ll.append(self.sess.run(self.log_marginal_likelihood_estimate, feed_dict=feed_dict))
-                sample_ll = np.array(sample_ll)
-                # print(sample_ll.shape)
-                m = np.amax(sample_ll, axis=1, keepdims=True)
-                log_marginal_estimate = m + np.log(np.mean(np.exp(sample_ll - m), axis=1, keepdims=True))
-                sum_ll += np.mean(log_marginal_estimate)
-            sum_ll /= 100.
-            print("---nll: %d" % sum_ll)
-            sys.stdout.flush()
-
 
             if epoch % self.conf.save_interval == 0:
                 self.save(epoch)
+
+        # ---------begin test----------
+                    
+        # generate samples
+        samples = []
+        for i in range(100): # generate 100*100 samples
+            samples.extend(self.sess.run(self.gsample))
+        samples = np.array(samples)
+        print (samples.shape)
+
+        #choose
+        sigmas = np.logspace(-1.0, 0.0, 10)
+        lls = []
+        for sigma in sigmas:
+            # evaluation
+            nlls = []
+            for i in range(1,10+1): # number of valid batches = 10
+                X, _ = self.valid_data.next_batch(self.conf.batch_size)
+                nll = parzen_cpu_batch(X, samples, sigma=sigma, batch_size=self.conf.batch_size, num_of_samples=10000, data_size=784)
+                nlls.extend(nll)
+            
+            nlls = np.array(nlls).reshape(1000) # 1000 valid images
+            print("sigma: ", sigma)
+            print("ll: %d" % (np.mean(nlls)))
+            lls.append(np.mean(nlls))
+        sigma = sigmas[np.argmax(lls)]
+        
+        # evaluation
+        nlls = []
+        for i in range(1,100+1): # number of test batches = 100
+            X, _ = self.test_data.next_batch(self.conf.batch_size)
+            nll = parzen_cpu_batch(X, samples, sigma=sigma, batch_size=self.conf.batch_size, num_of_samples=10000, data_size=784)
+            nlls.extend(nll)
+        
+        nlls = np.array(nlls).reshape(10000) # 10000 test images
+        print("sigma: ", sigma)
+        print("ll: %d" % (np.mean(nlls)))
+        print("se: %d" % (nlls.std() / np.sqrt(10000)))
+
+        # ---------end test----------
 
 
     def save_summary(self, summary, step, name):
