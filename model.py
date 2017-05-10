@@ -101,7 +101,7 @@ class Model():
                 sample_ll = []
                 for j in range(1000):
                     sample_ll.append(self.sess.run(self.log_marginal_likelihood_estimate, feed_dict=feed_dict))
-                sample_ll = np.array(sample_ll)
+                sample_ll = np.array(sample_ll).transpose((1,0))
                 # print(sample_ll.shape)
                 m = np.amax(sample_ll, axis=1, keepdims=True)
                 log_marginal_estimate = m + np.log(np.mean(np.exp(sample_ll - m), axis=1, keepdims=True))
